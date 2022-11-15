@@ -45,6 +45,8 @@ class Character:
     :param defense: Le niveau de défense du personnage
     :param level: Le niveau d'expérience du personnage
     """
+    CRIT_PROB = 1/16
+    RANDOM_MODIFIER_RANGE = 0.15
 
     def __init__(self, name: str, max_hp: int, attack: int, defense: int, level: int):
         self.__name = name
@@ -82,24 +84,38 @@ class Character:
                     f"Cannot add a weapon of minimum level {new_weapon.min_level} to character of level {self.level}"
                 )
 
-    def compute_damage(self, target: "Character"):
+    @staticmethod
+    def calculate_damage(attacker_level, weapon_power, attack_power, defender_defense, crit_prob, rnd_factor):
         # Modifier
-        crit = 2 if random.random() < 0.0625 else 1
-        random_mod = random.uniform(0.85, 1)
+        crit = 2 if random.random() < crit_prob else 1
+        random_mod = random.uniform(1-rnd_factor, 1)
         modifier = crit * random_mod
 
-        # Weapon damage
-        weapon_damage = self.weapon.power if self.weapon.min_level <= self.level else 1
-        dmg = (((((((2 * self.level) / 5) + 2) * weapon_damage * (self.attack / target.defense)) / 50) + 2) * modifier)
+        level_factor = (((2 * attacker_level) / 5) + 2)
+        attack_factor = (attack_power / defender_defense)
+
+        dmg = ((((level_factor * weapon_power * attack_factor) / 50) + 2) * modifier)
         return dmg, crit == 2
+
+    def compute_damage(self, target: "Character"):
+        return self.calculate_damage(
+            self.level,
+            self.weapon.power,
+            self.attack,
+            target.defense,
+            self.CRIT_PROB,
+            self.RANDOM_MODIFIER_RANGE
+        )
 
 
 def deal_damage(attacker: Character, defender: Character):
     # TODO: Calculer dégâts
-    damage, _ = attacker.compute_damage(defender)
+    damage, crit = attacker.compute_damage(defender)
     defender.hp -= damage
 
     print(f"{attacker.name} used {attacker.weapon.name}")
+    if crit:
+        print("\tCRITICAL HIT!")
     print(f"\t{defender.name} took {damage} dmg")
 
 
@@ -123,11 +139,7 @@ def run_battle(c1: Character, c2: Character):
         deal_damage(attacker, defender)
         tours += 1
 
-    dead_character: Character
-    if c1.hp <= 0:
-        dead_character = c1
-    else:
-        dead_character = c2
+    dead_character = c1 if c1.hp <= 0 else c2
 
     print(f"{dead_character.name} is sleeping with the fishes.")
 
